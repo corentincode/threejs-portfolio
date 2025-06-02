@@ -1,125 +1,114 @@
 'use client';
 
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Plane, OrbitControls, useCursor, Text } from '@react-three/drei';
-import { useRef, useState } from 'react';
+import { OrbitControls, useCursor, useGLTF } from '@react-three/drei';
+import { useRef, useState, useEffect } from 'react';
 import * as THREE from 'three';
 import { useRouter } from 'next/navigation';
-import gsap from 'gsap';
+
+const MODEL_URL = '/Computer.glb';
 
 // Composant pour représenter un projet en 3D (un simple Plane avec texte et interaction)
-function ProjectCard({ position, name, id }: { position: [number, number, number]; name: string; id: number }) {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const textRef = useRef<THREE.Group>(null);
+function ProjectCard({ position, id }: { position: [number, number, number]; id: number }) {
+  const groupRef = useRef<THREE.Group>(null);
   const router = useRouter();
   const [hovered, setHovered] = useState(false);
 
-  // Changer le curseur au survol
-  useCursor(hovered);
+  // Charger le modèle GLB avec useGLTF
+  const { scene } = useGLTF(MODEL_URL);
 
-  // Animer la carte au survol avec GSAP
-  const hoverTween = useRef<gsap.core.Tween | null>(null);
+  // Cloner la scène du modèle pour chaque carte si elles doivent être indépendantes
+  const clonedScene = scene.clone();
+
+  useCursor(hovered);
 
   const handlePointerOver = () => {
     setHovered(true);
-    if (meshRef.current) {
-        hoverTween.current = gsap.to(meshRef.current.scale, { x: 1.1, y: 1.1, z: 1.1, duration: 0.3 });
-        gsap.to(meshRef.current.position, { z: 0.2, duration: 0.3 });
-    }
-    if (textRef.current) {
-      gsap.to(textRef.current.position, { z: 0.3, duration: 0.3 });
-    }
   };
 
   const handlePointerOut = () => {
     setHovered(false);
-     if (meshRef.current) {
-        if(hoverTween.current) hoverTween.current.reverse();
-         gsap.to(meshRef.current.position, { z: 0, duration: 0.3 });
-     }
-    if (textRef.current) {
-      gsap.to(textRef.current.position, { z: 0.1, duration: 0.3 });
-    }
   };
 
   const handleClick = () => {
     router.push(`/projects/${id}`);
   };
 
-  // Animation subtile continue
+  // Animation subtile continue (rotation sur l'axe Y local)
   useFrame(() => {
-    if (meshRef.current && !hovered) {
-        meshRef.current.rotation.y += 0.001;
+    if (groupRef.current && !hovered) {
+       groupRef.current.rotation.y += 0.003; // Vitesse de rotation ajustée pour être fluide
     }
   });
 
-  return (
-    <group position={position} onPointerOver={handlePointerOver} onPointerOut={handlePointerOut} onClick={handleClick}>
-      <Plane
-        ref={meshRef}
-        args={[2, 1.5]}
-      >
-        <meshStandardMaterial color="#1a1a1a" />
-      </Plane>
+  // Ajuster la position initiale du modèle une fois chargé et son orientation de base
+   useEffect(() => {
+    if (groupRef.current && clonedScene) {
+        // Centrer le modèle si nécessaire (dépend du point d'origine du modèle GLB)
+        const box = new THREE.Box3().setFromObject(clonedScene);
+        box.getCenter(clonedScene.position).multiplyScalar(-1);
 
-      <group position={[0, 0, 0.1]} ref={textRef}>
-        <Text
-          position={[0, 0, 0]}
-          fontSize={0.2}
-          color="#ffffff"
-          anchorX="center"
-          anchorY="middle"
-          font="/fonts/Montserrat-Bold.ttf"
-          outlineWidth={0.02}
-          outlineColor="#000000"
-          outlineBlur={0.02}
-        >
-          {name}
-        </Text>
-      </group>
+        // Orientation de base : par défaut le modèle doit faire face à l'extérieur du cercle depuis sa position
+        // Si le modèle est créé avec l'avant (face Z négative) orienté vers l'avant,
+        // alors aucune rotation initiale complexe n'est nécessaire ici si le groupRef est déjà bien positionné.
+        // Laisser le modèle dans son orientation par défaut après centrage.
+
+        // Ajuster la taille initiale
+        // Laisser l'échelle définie directement sur la primitive pour un contrôle plus direct
+
+    }
+   }, [clonedScene]);
+
+
+  return (
+    <group position={position} ref={groupRef} onPointerOver={handlePointerOver} onPointerOut={handlePointerOut} onClick={handleClick}>
+      {/* Utiliser la primitive avec la scène clonée et échelle ajustée */}
+      <primitive object={clonedScene} scale={[0.002, 0.002, 0.002]} /> {/* Échelle ajustée à 0.002 */}
     </group>
   );
 }
 
 export default function ProjectsScene() {
-  // Données de projets avec positions circulaires (exemple - ajustez avec vos vrais projets et dates)
   const projects = [
-    { id: 1, name: 'Portfolio 3D', position: [3, 0, 0] },
-    { id: 2, name: 'Application Web', position: [0, 0, 3] },
-    { id: 3, name: 'Jeu Vidéo', position: [-3, 0, 0] },
-    { id: 4, name: 'Bot Discord', position: [0, 0, -3] },
+    { id: 1, position: [5, 0, 0] },
+    { id: 2, position: [3.5, 0, 3.5] },
+    { id: 3, position: [0, 0, 5] },
+    { id: 4, position: [-3.5, 0, 3.5] },
+    { id: 5, position: [-5, 0, 0] },
+    { id: 6, position: [-3.5, 0, -3.5] },
+    { id: 7, position: [0, 0, -5] },
+    { id: 8, position: [3.5, 0, -3.5] }
   ];
 
-   // Calculer le centre approximatif du cercle pour le target d'OrbitControls
-   const centerX = projects.reduce((sum, p) => sum + p.position[0], 0) / projects.length;
-   const centerY = projects.reduce((sum, p) => sum + p.position[1], 0) / projects.length;
-   const centerZ = projects.reduce((sum, p) => sum + p.position[2], 0) / projects.length;
-   const center = [centerX, centerY, centerZ] as [number, number, number];
-
   return (
-    <Canvas camera={{ position: [centerX, centerY + 5, centerZ + 5], fov: 75 }}>
-      {/* Lumière d'ambiance pour éclairer la scène */}
-      <ambientLight intensity={0.5} />
+    <Canvas camera={{ position: [0, 5, 8], fov: 75 }}> {/* Position initiale de la caméra pour orbiter */}
+      <color attach="background" args={["#000000"]} />
+      <fog attach="fog" args={["#000000", 5, 25]} />
+      <ambientLight intensity={0.8} />
+      <directionalLight position={[10, 10, 5]} intensity={1.5} />
+      <pointLight position={[0, 5, 0]} intensity={1.0} />
+      <spotLight
+        position={[0, 5, 0]}
+        angle={0.5}
+        penumbra={1}
+        intensity={0.8}
+        castShadow
+      />
 
-      {/* Lumière directionnelle */}
-      <directionalLight position={[10, 10, 5]} intensity={1} />
-       {/* Lumière supplémentaire */}
-      <pointLight position={[0, 5, 0]} intensity={0.5} />
-
-      {/* Rendre les cartes de projets */}
       {projects.map((project) => (
-        <ProjectCard key={project.id} id={project.id} position={project.position as [number, number, number]} name={project.name} />
+        <ProjectCard key={project.id} id={project.id} position={project.position as [number, number, number]} />
       ))}
 
-      {/* Contrôles pour naviguer dans la scène */}
       <OrbitControls
         enableDamping
         dampingFactor={0.25}
         enableZoom={true}
-        enablePan={false}
-        target={center}
-        minPolarAngle={Math.PI / 4}
-        maxPolarAngle={Math.PI / 2}
+        enablePan={true} // Autoriser le déplacement
+        target={[0, 0, 0]} // Cibler le centre du cercle
+        minDistance={4} // Limite de zoom minimum (près du centre du cercle)
+        maxDistance={20} // Limite de zoom maximum (loin du cercle)
+        rotateSpeed={0.7} // Vitesse de rotation ajustée
+        // Aucune restriction d'angle polaire pour permettre la rotation complète
       />
     </Canvas>
   );

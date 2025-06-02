@@ -9,7 +9,7 @@ export default function Home() {
           <span className="block">Développeur Créatif</span>
           <span className="block text-4xl mt-4">Portfolio</span>
         </h1>
-      </div>
-    </main>
+        </div>
+      </main>
   );
 }
